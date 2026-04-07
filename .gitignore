@@ -12,5 +12,8 @@ wheels/
 # Compiled binaries
 mini
 
+# Assembly files
+*.s
+
 # Test directory (contains separate git repo)
 tests/
