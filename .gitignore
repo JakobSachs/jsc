@@ -15,5 +15,8 @@ mini
 # Assembly files
 *.s
 
+# C source files
+*.c
+
 # Test directory (contains separate git repo)
 tests/
