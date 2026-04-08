@@ -1,33 +1,67 @@
 from . import DEBUG
+from .ast import cexpr, cexpr_type
 from .parser import parse
 
 
-import hashlib, sys, subprocess
+import hashlib
+import sys
+import subprocess
 
 from pathlib import Path
 
 
+def _render_expr(inp: cexpr) -> str:
+
+    match inp.expr_type:
+        case cexpr_type.LITERAL:
+            return f"\tmovl    ${inp.value}, %eax\n"
+        case cexpr_type.UNARY_OP:
+            out = _render_expr(inp.children[0])
+
+            match inp.value:
+                case "~":
+                    out += "\tnot %eax\n"
+                case "-":
+                    out += "\tneg %eax\n"
+                case "!":
+                    out += """\tcmpl $0, %eax
+    \tmovl $0, %eax
+    \tsete %al
+    """
+                case _:
+                    raise ValueError()
+            return out
+        case cexpr_type.BINARY_OP:
+            out = _render_expr(inp.children[1])  # right val
+            out += "\tpush %rax\n"
+            out += _render_expr(inp.children[0])  # puts left value in eax
+
+            out += "\tpop %rbx\n"  # puts right value in ebx
+
+            match inp.value:
+                case "+":
+                    out += "\taddl %ebx, %eax\n"
+                case "-":
+                    out += "\tsubl %ebx, %eax\n"
+                case "*":
+                    out += "\timul %ebx, %eax\n"
+                case "/":
+
+                    out += "\tcdq\n"  # sign extend
+                    out += "\tidivl %ebx\n"  # EBX = EAX / EBX
+                    out += "\tmov %eax, %ebx\n"  # EBX = EAX / EBX
+            return out
+        case _:
+            raise ValueError()
+
+
 def compile(inp: str) -> str:
-    ops, val = parse(inp)
-    out = f"""
+    out = """
 .globl main
 
 main:
 """
-    out += f"\tmovl    ${val}, %eax\n"
-
-    for o in reversed(ops):
-        match o:
-            case "~":
-                out += "\tnot %eax\n"
-            case "-":
-                out += "\tneg %eax\n"
-            case "!":
-                out += """\tcmpl $0, %eax
-\tmovl $0, %eax
-\tsete %al
-"""
-
+    out += _render_expr(parse(inp))
     out += "\tret\n"
 
     return out
